@@ -8,32 +8,59 @@ import userRouter from "./routes/userRoute.js";
 import productRouter from "./routes/productRoute.js";
 import inquiryRouter from "./routes/inquiryRoute.js";
 
-// Load environment variables
+/* -------------------------------------------------------------------------- */
+/* 🔹 ENV SETUP */
+/* -------------------------------------------------------------------------- */
 dotenv.config();
 
-// App configuration
+/* -------------------------------------------------------------------------- */
+/* 🔹 APP INIT */
+/* -------------------------------------------------------------------------- */
 const app = express();
-const port = process.env.PORT || 4000;
+const PORT = process.env.PORT || 5000;
 
-// Connect to services
-connectDB();           // MongoDB
+/* -------------------------------------------------------------------------- */
+/* 🔹 CONNECT SERVICES (RUN ONCE) */
+/* -------------------------------------------------------------------------- */
+connectDB();           // MongoDB (cached connection)
 connectCloudinary();   // Cloudinary
 
-// Middlewares
-app.use(cors());
-app.use(express.json());
+/* -------------------------------------------------------------------------- */
+/* 🔹 MIDDLEWARES */
+/* -------------------------------------------------------------------------- */
+app.use(
+  cors({
+    origin: "*",
+    methods: ["GET", "POST", "PUT", "DELETE"],
+  })
+);
 
-// API routes
+app.use(express.json({ limit: "10mb" }));
+
+/* -------------------------------------------------------------------------- */
+/* 🔹 HEALTH CHECK (KEEP RENDER AWAKE) */
+/* -------------------------------------------------------------------------- */
+app.get("/health", (req, res) => {
+  res.status(200).send("OK");
+});
+
+/* -------------------------------------------------------------------------- */
+/* 🔹 API ROUTES */
+/* -------------------------------------------------------------------------- */
 app.use("/api/user", userRouter);
 app.use("/api/product", productRouter);
 app.use("/api/inquiry", inquiryRouter);
 
-// Default route
+/* -------------------------------------------------------------------------- */
+/* 🔹 ROOT ROUTE */
+/* -------------------------------------------------------------------------- */
 app.get("/", (req, res) => {
   res.send("API Working");
 });
 
-// Start server
-app.listen(port, () => {
-  console.log("Server started on PORT:", port);
+/* -------------------------------------------------------------------------- */
+/* 🔹 START SERVER */
+/* -------------------------------------------------------------------------- */
+app.listen(PORT, () => {
+  console.log(`🚀 Server started on PORT: ${PORT}`);
 });

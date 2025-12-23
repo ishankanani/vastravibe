@@ -4,6 +4,13 @@ import productModel from "../models/productModel.js";
 import fs from "fs/promises";
 
 /* -------------------------------------------------------------------------- */
+/* 🧠 SIMPLE IN-MEMORY CACHE (FOR LIST PRODUCTS) */
+/* -------------------------------------------------------------------------- */
+let cachedProducts = null;
+let lastFetchTime = 0;
+const CACHE_DURATION = 60 * 1000; // 1 minute
+
+/* -------------------------------------------------------------------------- */
 /* 🟢 ADD PRODUCT */
 /* -------------------------------------------------------------------------- */
 export const addProduct = async (req, res) => {
@@ -31,7 +38,7 @@ export const addProduct = async (req, res) => {
       });
     }
 
-    // Upload images
+    // Upload images to Cloudinary
     const imageUrls = await Promise.all(
       files.map(async (file) => {
         const upload = await cloudinary.uploader.upload(file.path);
@@ -61,6 +68,9 @@ export const addProduct = async (req, res) => {
     const product = new productModel(productData);
     await product.save();
 
+    // 🔄 clear cache after add
+    cachedProducts = null;
+
     res.json({
       success: true,
       message: "Product Added Successfully",
@@ -68,7 +78,7 @@ export const addProduct = async (req, res) => {
     });
   } catch (error) {
     console.error("addProduct error:", error);
-    res.json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
@@ -93,18 +103,18 @@ export const updateProduct = async (req, res) => {
     } = req.body;
 
     const product = await productModel.findById(id);
-    if (!product)
+    if (!product) {
       return res.json({ success: false, message: "Product not found" });
+    }
 
     product.name = name;
     product.description = description;
-    product.price = price;
+    product.price = Number(price);
     product.category = category;
     product.subCategory = subCategory;
     product.productCode = productCode || "";
     product.moq = moq || "";
-    product.bestseller = bestseller === "true";
-
+    product.bestseller = bestseller === "true" || bestseller === true;
     product.sizes = sizes ? JSON.parse(sizes) : [];
     product.colors = colors ? JSON.parse(colors) : [];
     product.fabric = fabric ? JSON.parse(fabric) : [];
@@ -126,6 +136,9 @@ export const updateProduct = async (req, res) => {
 
     await product.save();
 
+    // 🔄 clear cache after update
+    cachedProducts = null;
+
     res.json({
       success: true,
       message: "Product Updated Successfully",
@@ -133,20 +146,35 @@ export const updateProduct = async (req, res) => {
     });
   } catch (error) {
     console.error("updateProduct error:", error);
-    res.json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
 /* -------------------------------------------------------------------------- */
-/* 🟢 LIST PRODUCTS */
+/* 🟢 LIST PRODUCTS (🔥 OPTIMIZED & CACHED) */
 /* -------------------------------------------------------------------------- */
 export const listProducts = async (req, res) => {
   try {
-    const products = await productModel.find({}).sort({ date: -1 });
+    const now = Date.now();
+
+    // ⚡ serve from cache
+    if (cachedProducts && now - lastFetchTime < CACHE_DURATION) {
+      return res.json({ success: true, products: cachedProducts });
+    }
+
+    const products = await productModel
+      .find({})
+      .sort({ date: -1 })
+      .limit(30) // 🔥 VERY IMPORTANT
+      .lean();   // 🔥 VERY FAST
+
+    cachedProducts = products;
+    lastFetchTime = now;
+
     res.json({ success: true, products });
   } catch (error) {
     console.error("listProducts error:", error);
-    res.json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
@@ -156,10 +184,14 @@ export const listProducts = async (req, res) => {
 export const removeProduct = async (req, res) => {
   try {
     await productModel.findByIdAndDelete(req.body.id);
+
+    // 🔄 clear cache after delete
+    cachedProducts = null;
+
     res.json({ success: true, message: "Product Removed" });
   } catch (error) {
     console.error("removeProduct error:", error);
-    res.json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
@@ -168,10 +200,10 @@ export const removeProduct = async (req, res) => {
 /* -------------------------------------------------------------------------- */
 export const singleProduct = async (req, res) => {
   try {
-    const product = await productModel.findById(req.body.productId);
+    const product = await productModel.findById(req.body.productId).lean();
     res.json({ success: true, product });
   } catch (error) {
     console.error("singleProduct error:", error);
-    res.json({ success: false, message: error.message });
+    res.status(500).json({ success: false, message: "Server error" });
   }
 };

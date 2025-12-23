@@ -1,13 +1,22 @@
 import mongoose from "mongoose";
 
-const connectDB = async () =>{
+let isConnected = false;
 
-    mongoose.connection.on('connected',()=>{
-        console.log("DB Connected");
-    })
+const connectDB = async () => {
+  if (isConnected) {
+    return;
+  }
 
-    await mongoose.connect(`${process.env.MONGODB_URI}/e-commerce`)
+  try {
+    await mongoose.connect(`${process.env.MONGODB_URI}/e-commerce`, {
+      serverSelectionTimeoutMS: 5000,
+    });
 
-}
+    isConnected = true;
+    console.log("DB Connected");
+  } catch (error) {
+    console.error("MongoDB connection error:", error);
+  }
+};
 
 export default connectDB;
